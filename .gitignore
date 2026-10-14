@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+.venv/
+venv/
+node_modules/
+.next/
+out/
+dist/
+build/
+target/
+*.log
+.DS_Store
+metadata.scale
