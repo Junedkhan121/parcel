@@ -32,6 +32,7 @@ class NavEngine:
         self.asset_value = 0
         self.accrued_income = 0
         self.accrued_fees = 0
+        self.distributed = 0
         self.last_accrual = inception
 
     # -- state transitions ---------------------------------------------------
@@ -68,6 +69,37 @@ class NavEngine:
         self.accrued_fees += fee
         self.last_accrual = now
         return fee
+
+    def pay_distribution(self, amount: int, now: int) -> int:
+        """Pay accrued income out of the vehicle.
+
+        This is what makes a distribution real: cash leaves, so NAV
+        falls by the amount paid. Recording income raises NAV; paying it
+        out lowers it again. A fund that only ever accrues is an
+        accumulating fund, and its holders realise gains by selling.
+
+        Returns the amount actually paid, which is capped at the income
+        available -- a vehicle cannot distribute what it has not earned.
+        """
+        if amount < 0:
+            raise ValueError("distribution cannot be negative")
+
+        self.accrue_fees(now)
+
+        payable = min(amount, self.distributable)
+        self.accrued_income -= payable
+        self.distributed += payable
+        return payable
+
+    @property
+    def distributable(self) -> int:
+        """Income earned but not yet paid out, net of accrued fees.
+
+        Fees are charged against the vehicle before holders are paid,
+        so distributing gross income would be paying out money the
+        manager is owed.
+        """
+        return max(0, self.accrued_income - self.accrued_fees)
 
     def issue_shares(self, shares: int) -> None:
         if shares < 0:

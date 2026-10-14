@@ -159,6 +159,71 @@ class TestHolderValue:
         assert balance == to_fixed("100")
 
 
+class TestDistribution:
+    def test_paying_out_lowers_nav(self):
+        nav = make_engine(shares="1000")
+        nav.set_valuation(to_fixed("2400000"), NOW)
+        nav.add_income(to_fixed("10000"), NOW)
+        before = nav.nav_per_share
+
+        paid = nav.pay_distribution(to_fixed("10000"), NOW)
+        assert paid == to_fixed("10000")
+        assert nav.nav_per_share < before
+        assert nav.nav_per_share == to_fixed("2400")
+
+    def test_share_count_unchanged(self):
+        # A distribution is not a stock split.
+        nav = make_engine(shares="1000")
+        nav.set_valuation(to_fixed("2400000"), NOW)
+        nav.add_income(to_fixed("10000"), NOW)
+        nav.pay_distribution(to_fixed("5000"), NOW)
+        assert nav.total_shares == to_fixed("1000")
+
+    def test_cannot_distribute_more_than_earned(self):
+        nav = make_engine(shares="1000")
+        nav.set_valuation(to_fixed("2400000"), NOW)
+        nav.add_income(to_fixed("1000"), NOW)
+        paid = nav.pay_distribution(to_fixed("999999"), NOW)
+        assert paid == to_fixed("1000")
+        assert nav.accrued_income == 0
+
+    def test_distributable_is_net_of_fees(self):
+        # Fees are owed to the manager before holders are paid.
+        nav = make_engine(shares="1000", fee_bps=200)
+        nav.set_valuation(to_fixed("2400000"), NOW)
+        nav.add_income(to_fixed("50000"), NOW)
+        nav.accrue_fees(NOW + YEAR)
+        assert nav.distributable == nav.accrued_income - nav.accrued_fees
+
+    def test_distributable_never_negative(self):
+        nav = make_engine(shares="1000", fee_bps=500)
+        nav.set_valuation(to_fixed("2400000"), NOW)
+        nav.add_income(to_fixed("100"), NOW)
+        nav.accrue_fees(NOW + YEAR)
+        assert nav.distributable == 0
+
+    def test_distributed_total_is_tracked(self):
+        nav = make_engine(shares="1000")
+        nav.set_valuation(to_fixed("2400000"), NOW)
+        nav.add_income(to_fixed("10000"), NOW)
+        nav.pay_distribution(to_fixed("3000"), NOW)
+        nav.pay_distribution(to_fixed("2000"), NOW)
+        assert nav.distributed == to_fixed("5000")
+
+    def test_negative_distribution_rejected(self):
+        nav = make_engine()
+        with pytest.raises(ValueError):
+            nav.pay_distribution(to_fixed("-1"), NOW)
+
+    def test_nav_falls_by_exactly_what_was_paid(self):
+        nav = make_engine(shares="1000")
+        nav.set_valuation(to_fixed("2400000"), NOW)
+        nav.add_income(to_fixed("20000"), NOW)
+        before = nav.net_value
+        paid = nav.pay_distribution(to_fixed("12000"), NOW)
+        assert nav.net_value == before - paid
+
+
 class TestSnapshot:
     def test_snapshot_records_state(self):
         nav = make_engine(shares="1000", fee_bps=200)
